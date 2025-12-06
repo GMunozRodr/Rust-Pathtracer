@@ -1,0 +1,17 @@
+[package]
+name = "rust_raytracer2"
+version = "0.1.0"
+edition = "2024"
+
+
+[profile.release]
+debug = true
+
+[dependencies]
+gltf = { version = "1.4.1", features = ["KHR_lights_punctual", "KHR_materials_transmission", "KHR_materials_ior"] }
+glam = "0.30.9"
+rayon = "1.10"
+minifb = "0.28.0"
+image = { version = "0.25.9", default-features = false, features = ["png", "exr"] }
+oidn = "2.3.3"
+wide = "0.7.0"

@@ -49,8 +49,8 @@ When sampling the environment for lighting, you want to send more rays toward th
 Random sampling tends to clump, which shows up as noise patterns in the image. Blue noise spreads samples more evenly. I implemented the void-and-cluster algorithm to generate the noise textures at startup, then combine them with low-discrepancy sequences across frames. The first few samples look noticeably better than with pure random. My technique is rather simple and there are much better blue noise resources out there that I could have used, but I wanted to at least try implementing something myself as an educational challenge.
 
 Resources:
-- [The void-and-cluster method for dither array generation](https://ieeexplore.ieee.org/document/250433) — Ulichney
-- [Blue-noise Dithered Sampling](https://www.arnoldrenderer.com/research/dither_abstract.pdf) — Georgiev, Fajardo
+- [The void-and-cluster method for dither array generation](https://cv.ulichney.com/papers/1993-void-cluster.pdf) — Ulichney
+- [Blue-noise Dithered Sampling](https://blogs.autodesk.com/media-and-entertainment/2024/01/04/autodesk-arnold-research-papers/#bluenoise-dithered-sampling) — Georgiev, Fajardo
 
 ### Random Walk Subsurface Scattering
 

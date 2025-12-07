@@ -19,8 +19,6 @@ fn main() {
         std::process::exit(1);
     });
 
-    println!("Controls: WASD + mouse to move, Scroll = speed, A = toggle adaptive, T = tonemap, [/] = exposure");
-
     while app.window.is_open() {
         let now = Instant::now();
         let delta_time = (now - app.state.last_frame).as_secs_f32();

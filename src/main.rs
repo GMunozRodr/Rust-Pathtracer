@@ -81,9 +81,9 @@ fn run_benchmark(args: &[String]) {
     let gltf_scene = load_gltf(gltf_path).expect("Failed to load glTF");
     let load_time = load_start.elapsed();
     println!(
-        "  Loaded in {:.3}s: {} meshes, {} materials, {} textures",
+        "  Loaded in {:.3}s: {} instances, {} materials, {} textures",
         load_time.as_secs_f32(),
-        gltf_scene.meshes.len(),
+        gltf_scene.instances.len(),
         gltf_scene.materials.len(),
         gltf_scene.textures.len()
     );
@@ -109,7 +109,7 @@ fn run_benchmark(args: &[String]) {
     let sky_texture = Texture::solid(Vec3::new(0.5, 0.6, 0.8));
     let sky = TextureSky::new(sky_texture);
 
-    let scene = Scene::new(gltf_scene.meshes, materials, gltf_scene.textures, camera, sky, None);
+    let scene = Scene::new(gltf_scene.blases, gltf_scene.instances, materials, gltf_scene.textures, camera, sky, None);
     let build_time = build_start.elapsed();
     println!("  Built in {:.3}s", build_time.as_secs_f32());
 

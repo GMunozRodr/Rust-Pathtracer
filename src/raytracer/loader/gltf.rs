@@ -1,14 +1,14 @@
-use crate::raytracer::accel::{Blas, Instance};
+use crate::raytracer::accel::Blas;
 use crate::raytracer::camera::Camera;
 use crate::raytracer::material::{AlphaMode, Material};
 use crate::raytracer::shape::TriangleMesh;
 use crate::raytracer::texture::Texture;
 use glam::{Mat4, Vec2, Vec3, Vec4};
 use std::path::Path;
-use std::sync::Arc;
 
 pub struct GltfScene {
-    pub meshes: Vec<Instance<TriangleMesh>>,
+    pub blases: Vec<Blas<TriangleMesh>>,
+    pub instances: Vec<(u32, Mat4)>,
     pub materials: Vec<Material>,
     pub textures: Vec<Texture>,
     pub camera: Option<Camera>,
@@ -23,11 +23,12 @@ pub fn load_gltf<P: AsRef<Path>>(path: P) -> Result<GltfScene, GltfError> {
 
     let axis_correction = detect_axis_correction(&document);
 
-    let meshes = load_meshes(&document, &buffers, &materials, axis_correction);
+    let (blases, instances) = load_meshes(&document, &buffers, &materials, axis_correction);
     let camera = load_camera(&document, axis_correction);
 
     Ok(GltfScene {
-        meshes,
+        blases,
+        instances,
         materials,
         textures,
         camera,
@@ -206,17 +207,47 @@ fn load_materials(document: &gltf::Document, _textures: &[Texture]) -> Vec<Mater
         .collect()
 }
 
+fn compute_global_transforms(document: &gltf::Document) -> Vec<Mat4> {
+    let node_count = document.nodes().count();
+    let mut global_transforms = vec![Mat4::IDENTITY; node_count];
+
+    fn traverse(
+        node: gltf::Node,
+        parent_transform: Mat4,
+        global_transforms: &mut [Mat4],
+    ) {
+        let local = Mat4::from_cols_array_2d(&node.transform().matrix());
+        let global = parent_transform * local;
+        global_transforms[node.index()] = global;
+
+        for child in node.children() {
+            traverse(child, global, global_transforms);
+        }
+    }
+
+    for scene in document.scenes() {
+        for node in scene.nodes() {
+            traverse(node, Mat4::IDENTITY, &mut global_transforms);
+        }
+    }
+
+    global_transforms
+}
+
 fn load_meshes(
     document: &gltf::Document,
     buffers: &[gltf::buffer::Data],
     _materials: &[Material],
     axis_correction: Option<Mat4>,
-) -> Vec<Instance<TriangleMesh>> {
+) -> (Vec<Blas<TriangleMesh>>, Vec<(u32, Mat4)>) {
+    let mut blases = Vec::new();
     let mut instances = Vec::new();
+
+    let global_transforms = compute_global_transforms(document);
 
     for node in document.nodes() {
         if let Some(mesh) = node.mesh() {
-            let mut transform = Mat4::from_cols_array_2d(&node.transform().matrix());
+            let mut transform = global_transforms[node.index()];
 
             if let Some(correction) = axis_correction {
                 transform = correction * transform;
@@ -267,20 +298,22 @@ fn load_meshes(
                 let material_id = primitive.material().index().unwrap_or(0) as u32;
 
                 let mesh = TriangleMesh::new(positions, normals, uvs, indices, material_id);
-                let blas = Arc::new(Blas::build(vec![mesh]));
-                let instance = Instance::new(blas, transform);
-                instances.push(instance);
+                let blas_index = blases.len() as u32;
+                blases.push(Blas::build(vec![mesh]));
+                instances.push((blas_index, transform));
             }
         }
     }
 
-    instances
+    (blases, instances)
 }
 
 fn load_camera(document: &gltf::Document, axis_correction: Option<Mat4>) -> Option<Camera> {
+    let global_transforms = compute_global_transforms(document);
+
     for node in document.nodes() {
         if let Some(cam) = node.camera() {
-            let mut transform = Mat4::from_cols_array_2d(&node.transform().matrix());
+            let mut transform = global_transforms[node.index()];
 
             if let Some(correction) = axis_correction {
                 transform = correction * transform;

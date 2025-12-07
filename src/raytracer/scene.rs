@@ -1,4 +1,4 @@
-use crate::raytracer::accel::{Instance, Tlas};
+use crate::raytracer::accel::{Blas, Tlas};
 use crate::raytracer::camera::Camera;
 use crate::raytracer::light::DirectionalLight;
 use crate::raytracer::material::Material;
@@ -7,7 +7,7 @@ use crate::raytracer::renderer::SceneAccess;
 use crate::raytracer::shape::Shape;
 use crate::raytracer::sky::{Sky, SkySample};
 use crate::raytracer::texture::Texture;
-use glam::{Vec2, Vec3};
+use glam::{Mat4, Vec2, Vec3};
 
 pub struct Scene<P: Shape, S: Sky> {
     pub materials: Vec<Material>,
@@ -20,14 +20,15 @@ pub struct Scene<P: Shape, S: Sky> {
 
 impl<P: Shape, S: Sky> Scene<P, S> {
     pub fn new(
-        instances: Vec<Instance<P>>,
+        blases: Vec<Blas<P>>,
+        instances: Vec<(u32, Mat4)>,
         materials: Vec<Material>,
         textures: Vec<Texture>,
         camera: Camera,
         sky: S,
         sun: Option<DirectionalLight>,
     ) -> Self {
-        let tlas = Tlas::build(instances);
+        let tlas = Tlas::build(blases, instances);
         Scene {
             materials,
             textures,

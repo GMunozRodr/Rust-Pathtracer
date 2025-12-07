@@ -95,14 +95,21 @@ impl App {
         let start = Instant::now();
         let gltf_scene = load_gltf(gltf_path).map_err(|e| format!("Failed to load glTF: {}", e))?;
         println!("Loaded in {:.2}s:", start.elapsed().as_secs_f32());
-        println!("  {} meshes", gltf_scene.meshes.len());
+        println!("  {} instances", gltf_scene.instances.len());
         println!("  {} materials", gltf_scene.materials.len());
         println!("  {} textures", gltf_scene.textures.len());
 
         let aspect = config.width as f32 / config.height as f32;
-        let mut camera = gltf_scene.camera.unwrap_or_else(|| {
-            Camera::new(Vec3::new(0.0, 1.0, 3.0), Vec3::new(0.0, 0.5, 0.0), 60.0, aspect)
-        });
+        let mut camera = match gltf_scene.camera {
+            Some(cam) => {
+                println!("  camera: found at ({:.2}, {:.2}, {:.2})", cam.position.x, cam.position.y, cam.position.z);
+                cam
+            }
+            None => {
+                println!("  camera: using default");
+                Camera::new(Vec3::new(0.0, 1.0, 3.0), Vec3::new(0.0, 0.5, 0.0), 60.0, aspect)
+            }
+        };
         camera.aspect_ratio = aspect;
         camera.update_matrix();
 
@@ -126,7 +133,7 @@ impl App {
 
         println!("Building scene...");
         let build_start = Instant::now();
-        let scene = Scene::new(gltf_scene.meshes, materials, gltf_scene.textures, camera, sky, Some(sun));
+        let scene = Scene::new(gltf_scene.blases, gltf_scene.instances, materials, gltf_scene.textures, camera, sky, Some(sun));
         println!("Scene built in {:.2}s", build_start.elapsed().as_secs_f32());
 
         let adaptive_config = AdaptiveSamplingConfig {

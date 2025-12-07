@@ -5,7 +5,6 @@ pub use bvh::{Aabb, Bvh8};
 use crate::raytracer::ray::{HitData, Ray};
 use crate::raytracer::shape::Shape;
 use glam::{Mat4, Vec3};
-use std::sync::Arc;
 
 pub trait Bounded {
     fn bounds(&self) -> Aabb;
@@ -73,21 +72,21 @@ impl<T: Shape> Blas<T> {
     }
 }
 
-pub struct Instance<T: Shape> {
-    pub blas: Arc<Blas<T>>,
+pub struct Instance {
+    pub blas_index: u32,
     pub transform: Mat4,
     pub inverse_transform: Mat4,
     normal_matrix: Mat4,
     world_bounds: Aabb,
 }
 
-impl<T: Shape> Instance<T> {
-    pub fn new(blas: Arc<Blas<T>>, transform: Mat4) -> Self {
+impl Instance {
+    pub fn new(blas_index: u32, blas_bounds: Aabb, transform: Mat4) -> Self {
         let inverse_transform = transform.inverse();
         let normal_matrix = inverse_transform.transpose();
-        let world_bounds = Self::compute_world_bounds(&blas, &transform);
+        let world_bounds = Self::compute_world_bounds(blas_bounds, &transform);
         Instance {
-            blas,
+            blas_index,
             transform,
             inverse_transform,
             normal_matrix,
@@ -95,8 +94,7 @@ impl<T: Shape> Instance<T> {
         }
     }
 
-    fn compute_world_bounds(blas: &Blas<T>, transform: &Mat4) -> Aabb {
-        let local_bounds = blas.bounds();
+    fn compute_world_bounds(local_bounds: Aabb, transform: &Mat4) -> Aabb {
         let corners = [
             Vec3::new(local_bounds.min.x, local_bounds.min.y, local_bounds.min.z),
             Vec3::new(local_bounds.max.x, local_bounds.min.y, local_bounds.min.z),
@@ -122,12 +120,12 @@ impl<T: Shape> Instance<T> {
     }
 
     #[inline]
-    pub fn hit(&self, ray: &Ray) -> Option<HitData> {
+    pub fn hit<T: Shape>(&self, ray: &Ray, blas: &Blas<T>) -> Option<HitData> {
         let local_origin = self.inverse_transform.transform_point3(ray.origin);
         let local_direction = self.inverse_transform.transform_vector3(ray.direction);
         let local_ray = Ray::new(local_origin, local_direction);
 
-        let mut hit = self.blas.hit(&local_ray)?;
+        let mut hit = blas.hit(&local_ray)?;
 
         let local_hit_point = local_origin + hit.t * local_direction;
         let world_hit_point = self.transform.transform_point3(local_hit_point);
@@ -140,15 +138,15 @@ impl<T: Shape> Instance<T> {
     }
 
     #[inline]
-    pub fn hit_any(&self, ray: &Ray) -> bool {
+    pub fn hit_any<T: Shape>(&self, ray: &Ray, blas: &Blas<T>) -> bool {
         let local_origin = self.inverse_transform.transform_point3(ray.origin);
         let local_direction = self.inverse_transform.transform_vector3(ray.direction);
         let local_ray = Ray::new(local_origin, local_direction);
-        self.blas.hit_any(&local_ray)
+        blas.hit_any(&local_ray)
     }
 }
 
-impl<T: Shape> Bounded for Instance<T> {
+impl Bounded for Instance {
     fn bounds(&self) -> Aabb {
         self.world_bounds
     }
@@ -160,17 +158,27 @@ impl<T: Shape> Bounded for Instance<T> {
 
 pub struct Tlas<T: Shape> {
     bvh8: Bvh8,
-    instances: Vec<Instance<T>>,
+    instances: Vec<Instance>,
+    blases: Vec<Blas<T>>,
 }
 
 impl<T: Shape> Tlas<T> {
-    pub fn build(instances: Vec<Instance<T>>) -> Tlas<T> {
-        if instances.is_empty() {
+    pub fn build(blases: Vec<Blas<T>>, instance_data: Vec<(u32, Mat4)>) -> Tlas<T> {
+        if instance_data.is_empty() {
             return Tlas {
                 bvh8: Bvh8::empty(),
-                instances,
+                instances: Vec::new(),
+                blases,
             };
         }
+
+        let instances: Vec<Instance> = instance_data
+            .into_iter()
+            .map(|(blas_idx, transform)| {
+                let blas_bounds = blases[blas_idx as usize].bounds();
+                Instance::new(blas_idx, blas_bounds, transform)
+            })
+            .collect();
 
         let instance_bounds: Vec<_> = instances
             .iter()
@@ -180,21 +188,24 @@ impl<T: Shape> Tlas<T> {
 
         let bvh8 = Bvh8::build(instance_bounds, 1);
 
-        Tlas { bvh8, instances }
+        Tlas { bvh8, instances, blases }
     }
 
     #[inline]
     pub fn hit(&self, ray: &Ray) -> Option<HitData> {
         self.bvh8.traverse_closest(ray, |inst_idx, ray| {
             let instance = &self.instances[inst_idx as usize];
-            instance.hit(ray).map(|hit| (hit.t, hit))
+            let blas = &self.blases[instance.blas_index as usize];
+            instance.hit(ray, blas).map(|hit| (hit.t, hit))
         })
     }
 
     #[inline]
     pub fn hit_any(&self, ray: &Ray) -> bool {
         self.bvh8.traverse_any(ray, |inst_idx, ray| {
-            self.instances[inst_idx as usize].hit_any(ray)
+            let instance = &self.instances[inst_idx as usize];
+            let blas = &self.blases[instance.blas_index as usize];
+            instance.hit_any(ray, blas)
         })
     }
 }
